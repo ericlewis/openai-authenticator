@@ -1,5 +1,5 @@
 import makeFetchCookie from "fetch-cookie";
-const fetch = makeFetchCookie(global.fetch);
+const session = { fetch: makeFetchCookie(fetch) };
 
 export default class Authenticator {
   constructor() {}
@@ -24,7 +24,7 @@ export default class Authenticator {
   }
 
   async #zero() {
-	const response = await fetch(
+	const response = await session.fetch(
 	  "https://explorer.api.openai.com/api/auth/csrf"
 	);
 	const { csrfToken } = await response.json();
@@ -32,7 +32,7 @@ export default class Authenticator {
   }
 
   async #one(csrfToken) {
-	const response = await fetch(
+	const response = await session.fetch(
 	  "https://explorer.api.openai.com/api/auth/signin/auth0?prompt=login",
 	  {
 		method: "POST",
@@ -51,21 +51,21 @@ export default class Authenticator {
   }
 
   async #two(url) {
-	const response = await fetch(url, {
+	const response = await session.fetch(url, {
 	  redirect: "manual",
 	});
 	return (await response.text()).slice(48);
   }
 
   async #three(state) {
-	const response = await fetch(
+	const response = await session.fetch(
 	  `https://auth0.openai.com/u/login/identifier?state=${state}`
 	);
 	return state;
   }
 
   async #four(state, username) {
-	const response = await fetch(
+	const response = await session.fetch(
 	  `https://auth0.openai.com/u/login/identifier?state=${state}`,
 	  {
 		method: "POST",
@@ -87,7 +87,7 @@ export default class Authenticator {
   }
 
   async #five(state, username, password) {
-	const response = await fetch(
+	const response = await session.fetch(
 	  `https://auth0.openai.com/u/login/password?state=${state}`,
 	  {
 		method: "POST",
@@ -107,11 +107,11 @@ export default class Authenticator {
   }
 
   async #six(state) {
-	await fetch(`https://auth0.openai.com/authorize/resume?state=${state}`);
+	await session.fetch(`https://auth0.openai.com/authorize/resume?state=${state}`);
   }
 
   async #seven() {
-	const response = await fetch(
+	const response = await session.fetch(
 	  "https://explorer.api.openai.com/api/auth/session"
 	);
 	const { accessToken } = await response.json();
