@@ -1,71 +1,84 @@
-import makeFetchCookie from "fetch-cookie";
-const session = { fetch: makeFetchCookie(fetch) };
+import makeSession from "fetch-cookie";
+
+export class HttpError extends Error {
+  constructor(location, statusCode, details) {
+	super(details);
+  }
+}
 
 export default class Authenticator {
-  constructor() {}
-
-  async login(email, password) {
-	return this.#zero()
-	  .then(this.#one)
-	  .then(this.#two)
-	  .then(this.#three)
-	  .then((state) => this.#four(state, email))
-	  .then((state) => this.#five(state, email, password))
-	  .then(this.#six)
-	  .then(this.#seven);
+  #email;
+  #password;
+  #session;
+  
+  constructor(email, password, session = makeSession(fetch)) {
+	this.#email = email;
+	this.#password = password;
+	this.#session = session;
   }
 
-  async refresh() {
+  async login(email = this.#email, password = this.#password) {
+	return this.#zero()
+	  .then(this.#one.bind(this))
+	  .then(this.#two.bind(this))
+	  .then(this.#three.bind(this))
+	  .then((state) => this.#four(state, email))
+	  .then((state) => this.#five(state, email, password))
+	  .then(this.#six.bind(this))
+	  .then(this.#seven.bind(this));
+  }
+
+  refresh() {
 	return this.#seven();
   }
 
-  async logout() {
-	// TODO: implement
-  }
-
   async #zero() {
-	const response = await session.fetch(
-	  "https://explorer.api.openai.com/api/auth/csrf"
-	);
-	const { csrfToken } = await response.json();
-	return csrfToken;
+	return (
+	  await (
+		await this.#session(
+		  "https://explorer.api.openai.com/api/auth/csrf"
+		)
+	  ).json()
+	).csrfToken;
   }
 
   async #one(csrfToken) {
-	const response = await session.fetch(
-	  "https://explorer.api.openai.com/api/auth/signin/auth0?prompt=login",
-	  {
-		method: "POST",
-		body: new URLSearchParams({
-		  callbackUrl: "/",
-		  csrfToken,
-		  json: true,
-		}),
-		headers: {
-		  "Content-Type": "application/x-www-form-urlencoded",
-		},
-	  }
-	);
-	const { url } = await response.json();
-	return url;
+	return (
+	  await (
+		await this.#session(
+		  "https://explorer.api.openai.com/api/auth/signin/auth0?prompt=login",
+		  {
+			method: "POST",
+			body: new URLSearchParams({
+			  callbackUrl: "/",
+			  csrfToken,
+			  json: true,
+			}),
+			headers: {
+			  "Content-Type": "application/x-www-form-urlencoded",
+			},
+		  }
+		)
+	  ).json()
+	).url;
   }
 
   async #two(url) {
-	const response = await session.fetch(url, {
+	const response = await this.#session(url, {
 	  redirect: "manual",
 	});
 	return (await response.text()).slice(48);
   }
 
   async #three(state) {
-	const response = await session.fetch(
+	const response = await this.#session(
 	  `https://auth0.openai.com/u/login/identifier?state=${state}`
 	);
 	return state;
   }
 
   async #four(state, username) {
-	const response = await session.fetch(
+	const response = await this.#session(
 	  `https://auth0.openai.com/u/login/identifier?state=${state}`,
 	  {
 		method: "POST",
@@ -87,7 +100,7 @@ export default class Authenticator {
   }
 
   async #five(state, username, password) {
-	const response = await session.fetch(
+	const response = await this.#session(
 	  `https://auth0.openai.com/u/login/password?state=${state}`,
 	  {
 		method: "POST",
@@ -107,11 +120,13 @@ export default class Authenticator {
   }
 
   async #six(state) {
-	await session.fetch(`https://auth0.openai.com/authorize/resume?state=${state}`);
+	await this.#session(
+	  `https://auth0.openai.com/authorize/resume?state=${state}`
+	);
   }
 
   async #seven() {
-	const response = await session.fetch(
+	const response = await this.#session(
 	  "https://explorer.api.openai.com/api/auth/session"
 	);
 	const { accessToken } = await response.json();
